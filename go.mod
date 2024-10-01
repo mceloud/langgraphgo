@@ -1,4 +1,4 @@
-module github.com/aurelien-dm/langgraphgo
+module github.com/mceloud/langgraphgo
 
 go 1.22.0
 
