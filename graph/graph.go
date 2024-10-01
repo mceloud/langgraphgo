@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/tmc/langchaingo/llms"
 )
 
 // END is a special constant used to represent the end node in the graph.
@@ -29,7 +27,7 @@ type Node struct {
 
 	// Function is the function associated with the node.
 	// It takes a context and a slice of MessageContent as input and returns a slice of MessageContent and an error.
-	Function func(ctx context.Context, state []llms.MessageContent) ([]llms.MessageContent, error)
+	Function func(ctx context.Context, state interface{}) (interface{}, error)
 }
 
 // Edge represents an edge in the message graph.
@@ -50,7 +48,7 @@ type MessageGraph struct {
 	edges []Edge
 
 	// conditionalEdges contains a map between "From" node, while "To" node is derived based on the condition.
-	conditionalEdges map[string]func(ctx context.Context, state []llms.MessageContent) string
+	conditionalEdges map[string]func(ctx context.Context, state interface{}) string
 
 	// entryPoint is the name of the entry point node in the graph.
 	entryPoint string
@@ -60,12 +58,12 @@ type MessageGraph struct {
 func NewMessageGraph() *MessageGraph {
 	return &MessageGraph{
 		nodes:            make(map[string]Node),
-		conditionalEdges: make(map[string]func(ctx context.Context, state []llms.MessageContent) string),
+		conditionalEdges: make(map[string]func(ctx context.Context, state interface{}) string),
 	}
 }
 
 // AddNode adds a new node to the message graph with the given name and function.
-func (g *MessageGraph) AddNode(name string, fn func(ctx context.Context, state []llms.MessageContent) ([]llms.MessageContent, error)) {
+func (g *MessageGraph) AddNode(name string, fn func(ctx context.Context, state interface{}) (interface{}, error)) {
 	g.nodes[name] = Node{
 		Name:     name,
 		Function: fn,
@@ -81,7 +79,7 @@ func (g *MessageGraph) AddEdge(from, to string) {
 }
 
 // AddConditionalEdge adds a new edge in which "from" node is identified based on the "condition".
-func (g *MessageGraph) AddConditionalEdge(from string, condition func(ctx context.Context, state []llms.MessageContent) string) {
+func (g *MessageGraph) AddConditionalEdge(from string, condition func(ctx context.Context, state interface{}) string) {
 	g.conditionalEdges[from] = condition
 }
 
@@ -112,7 +110,7 @@ func (g *MessageGraph) Compile() (*Runnable, error) {
 // It returns the resulting messages and an error if any occurs during the execution.
 // Invoke executes the compiled message graph with the given input messages.
 // It returns the resulting messages and an error if any occurs during the execution.
-func (r *Runnable) Invoke(ctx context.Context, messages []llms.MessageContent) ([]llms.MessageContent, error) {
+func (r *Runnable) Invoke(ctx context.Context, messages interface{}) (interface{}, error) {
 	state := messages
 	currentNode := r.graph.entryPoint
 

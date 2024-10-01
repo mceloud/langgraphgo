@@ -20,16 +20,16 @@ func ExampleMessageGraph() {
 
 	g := graph.NewMessageGraph()
 
-	g.AddNode("oracle", func(ctx context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-		r, err := model.GenerateContent(ctx, state, llms.WithTemperature(0.0))
+	g.AddNode("oracle", func(ctx context.Context, state interface{}) (interface{}, error) {
+		r, err := model.GenerateContent(ctx, state.([]llms.MessageContent), llms.WithTemperature(0.0))
 		if err != nil {
 			return nil, err
 		}
-		return append(state,
+		return append(state.([]llms.MessageContent),
 			llms.TextParts(llms.ChatMessageTypeAI, r.Choices[0].Content),
 		), nil
 	})
-	g.AddNode(graph.END, func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
+	g.AddNode(graph.END, func(_ context.Context, state interface{}) (interface{}, error) {
 		return state, nil
 	})
 
@@ -70,11 +70,11 @@ func TestMessageGraph(t *testing.T) {
 			name: "Simple graph",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-					return append(state, llms.TextParts(llms.ChatMessageTypeAI, "Node 1")), nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
+					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 1")), nil
 				})
-				g.AddNode("node2", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-					return append(state, llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
+				g.AddNode("node2", func(_ context.Context, state interface{}) (interface{}, error) {
+					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
 				})
 				g.AddEdge("node1", "node2")
 				g.AddEdge("node2", graph.END)
@@ -93,7 +93,7 @@ func TestMessageGraph(t *testing.T) {
 			name: "Entry point not set",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
+				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
 					return state, nil
 				})
 				return g
@@ -104,7 +104,7 @@ func TestMessageGraph(t *testing.T) {
 			name: "Node not found",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
+				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
 					return state, nil
 				})
 				g.AddEdge("node1", "node2")
@@ -117,7 +117,7 @@ func TestMessageGraph(t *testing.T) {
 			name: "No outgoing edge",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
+				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
 					return state, nil
 				})
 				g.SetEntryPoint("node1")
@@ -129,7 +129,7 @@ func TestMessageGraph(t *testing.T) {
 			name: "Error in node function",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, _ []llms.MessageContent) ([]llms.MessageContent, error) {
+				g.AddNode("node1", func(_ context.Context, _ interface{}) (interface{}, error) {
 					return nil, errors.New("node error")
 				})
 				g.AddEdge("node1", graph.END)
@@ -142,17 +142,17 @@ func TestMessageGraph(t *testing.T) {
 			name: "Conditional edge - condition for edge fulfilled",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-					return append(state, llms.TextParts(llms.ChatMessageTypeAI, "function calling: use calculator")), nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
+					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "function calling: use calculator")), nil
 				})
-				g.AddNode("node2", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-					return append(state, llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
+				g.AddNode("node2", func(_ context.Context, state interface{}) (interface{}, error) {
+					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
 				})
-				g.AddNode("calculator", func(_ context.Context, state []llms.MessageContent) ([]llms.MessageContent, error) {
-					return append(state, llms.TextParts(llms.ChatMessageTypeTool, "1+1=2")), nil
+				g.AddNode("calculator", func(_ context.Context, state interface{}) (interface{}, error) {
+					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeTool, "1+1=2")), nil
 				})
-				g.AddConditionalEdge("node1", func(_ context.Context, state []llms.MessageContent) string {
-					if content, ok := state[len(state)-1].Parts[0].(llms.TextContent); ok {
+				g.AddConditionalEdge("node1", func(_ context.Context, state interface{}) string {
+					if content, ok := state.([]llms.MessageContent)[len(state.([]llms.MessageContent))-1].Parts[0].(llms.TextContent); ok {
 						if strings.Contains(content.Text, "calculator") {
 							return "calculator"
 						}
@@ -198,11 +198,11 @@ func TestMessageGraph(t *testing.T) {
 				t.Fatalf("expected error %v, but got nil", tc.expectedError)
 			}
 
-			if len(output) != len(tc.expectedOutput) {
-				t.Fatalf("expected output length %d, but got %d", len(tc.expectedOutput), len(output))
+			if len(output.([]llms.MessageContent)) != len(tc.expectedOutput) {
+				t.Fatalf("expected output length %d, but got %d", len(tc.expectedOutput), len(output.([]llms.MessageContent)))
 			}
 
-			for i, msg := range output {
+			for i, msg := range output.([]llms.MessageContent) {
 				got := fmt.Sprint(msg)
 				expected := fmt.Sprint(tc.expectedOutput[i])
 				if got != expected {
