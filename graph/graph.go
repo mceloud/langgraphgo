@@ -48,7 +48,7 @@ type MessageGraph struct {
 	edges []Edge
 
 	// conditionalEdges contains a map between "From" node, while "To" node is derived based on the condition.
-	conditionalEdges map[string]func(ctx context.Context, state interface{}) string
+	conditionalEdges map[string]func(ctx context.Context, state interface{}) []string
 
 	// entryPoint is the name of the entry point node in the graph.
 	entryPoint string
@@ -58,7 +58,7 @@ type MessageGraph struct {
 func NewMessageGraph() *MessageGraph {
 	return &MessageGraph{
 		nodes:            make(map[string]Node),
-		conditionalEdges: make(map[string]func(ctx context.Context, state interface{}) string),
+		conditionalEdges: make(map[string]func(ctx context.Context, state interface{}) []string),
 	}
 }
 
@@ -79,7 +79,7 @@ func (g *MessageGraph) AddEdge(from, to string) {
 }
 
 // AddConditionalEdge adds a new edge in which "from" node is identified based on the "condition".
-func (g *MessageGraph) AddConditionalEdge(from string, condition func(ctx context.Context, state interface{}) string) {
+func (g *MessageGraph) AddConditionalEdge(from string, condition func(ctx context.Context, state interface{}) []string) {
 	g.conditionalEdges[from] = condition
 }
 
@@ -130,11 +130,35 @@ func (r *Runnable) Invoke(ctx context.Context, messages interface{}) (interface{
 			return nil, fmt.Errorf("error in node %s: %w", currentNode, err)
 		}
 
+	NEXT:
 		foundNext := false
-		nextNodeFn, ok := r.graph.conditionalEdges[currentNode]
+		nextNodeFns, ok := r.graph.conditionalEdges[currentNode]
 		if ok {
-			currentNode = nextNodeFn(ctx, state)
-			foundNext = true
+			nextNode := ""
+			for _, nextNodeFn := range nextNodeFns(ctx, state) {
+				nextNode = nextNodeFn
+				node, ok := r.graph.nodes[nextNodeFn]
+				if !ok {
+					return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, nextNodeFn)
+				}
+
+				var err error
+				state, err = node.Function(ctx, state)
+				if err != nil {
+					return nil, fmt.Errorf("error in node %s: %w", nextNodeFn, err)
+				}
+			}
+			for _, edge := range r.graph.edges {
+				if edge.From == nextNode { // assuming the first completed branch connects to the next stage
+					currentNode = edge.To
+					foundNext = true
+					break
+				}
+			}
+			if _, ok := r.graph.conditionalEdges[nextNode]; ok {
+				currentNode = nextNode
+				goto NEXT
+			}
 		}
 
 		if !foundNext {

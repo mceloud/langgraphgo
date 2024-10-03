@@ -151,13 +151,13 @@ func TestMessageGraph(t *testing.T) {
 				g.AddNode("calculator", func(_ context.Context, state interface{}) (interface{}, error) {
 					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeTool, "1+1=2")), nil
 				})
-				g.AddConditionalEdge("node1", func(_ context.Context, state interface{}) string {
+				g.AddConditionalEdge("node1", func(_ context.Context, state interface{}) []string {
 					if content, ok := state.([]llms.MessageContent)[len(state.([]llms.MessageContent))-1].Parts[0].(llms.TextContent); ok {
 						if strings.Contains(content.Text, "calculator") {
-							return "calculator"
+							return []string{"calculator"}
 						}
 					}
-					return "node2"
+					return []string{"node2"}
 				})
 				g.AddEdge("node2", graph.END)
 				g.AddEdge("calculator", graph.END)
