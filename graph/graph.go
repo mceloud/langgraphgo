@@ -27,7 +27,7 @@ type Node struct {
 
 	// Function is the function associated with the node.
 	// It takes a context and a slice of MessageContent as input and returns a slice of MessageContent and an error.
-	Function func(ctx context.Context, state interface{}) (interface{}, error)
+	Function func(ctx context.Context, state interface{}) error
 }
 
 // Edge represents an edge in the message graph.
@@ -63,7 +63,7 @@ func NewMessageGraph() *MessageGraph {
 }
 
 // AddNode adds a new node to the message graph with the given name and function.
-func (g *MessageGraph) AddNode(name string, fn func(ctx context.Context, state interface{}) (interface{}, error)) {
+func (g *MessageGraph) AddNode(name string, fn func(ctx context.Context, state interface{}) error) {
 	g.nodes[name] = Node{
 		Name:     name,
 		Function: fn,
@@ -125,7 +125,7 @@ func (r *Runnable) Invoke(ctx context.Context, messages interface{}) (interface{
 		}
 
 		var err error
-		state, err = node.Function(ctx, state)
+		err = node.Function(ctx, state)
 		if err != nil {
 			return nil, fmt.Errorf("error in node %s: %w", currentNode, err)
 		}
@@ -135,17 +135,25 @@ func (r *Runnable) Invoke(ctx context.Context, messages interface{}) (interface{
 		nextNodeFns, ok := r.graph.conditionalEdges[currentNode]
 		if ok {
 			nextNode := ""
-			for _, nextNodeFn := range nextNodeFns(ctx, state) {
+			fns := nextNodeFns(ctx, state)
+			errChan := make(chan error)
+			for _, nextNodeFn := range fns {
 				nextNode = nextNodeFn
 				node, ok := r.graph.nodes[nextNodeFn]
 				if !ok {
 					return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, nextNodeFn)
 				}
 
-				var err error
-				state, err = node.Function(ctx, state)
+				go func() {
+					var err error
+					err = node.Function(ctx, state)
+					errChan <- err
+				}()
+			}
+			for i := 0; i < len(fns); i++ {
+				err := <-errChan
 				if err != nil {
-					return nil, fmt.Errorf("error in node %s: %w", nextNodeFn, err)
+					return nil, err
 				}
 			}
 			for _, edge := range r.graph.edges {

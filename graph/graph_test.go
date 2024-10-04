@@ -20,17 +20,15 @@ func ExampleMessageGraph() {
 
 	g := graph.NewMessageGraph()
 
-	g.AddNode("oracle", func(ctx context.Context, state interface{}) (interface{}, error) {
-		r, err := model.GenerateContent(ctx, state.([]llms.MessageContent), llms.WithTemperature(0.0))
+	g.AddNode("oracle", func(ctx context.Context, state interface{}) error {
+		_, err := model.GenerateContent(ctx, state.([]llms.MessageContent), llms.WithTemperature(0.0))
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return append(state.([]llms.MessageContent),
-			llms.TextParts(llms.ChatMessageTypeAI, r.Choices[0].Content),
-		), nil
+		return nil
 	})
-	g.AddNode(graph.END, func(_ context.Context, state interface{}) (interface{}, error) {
-		return state, nil
+	g.AddNode(graph.END, func(_ context.Context, state interface{}) error {
+		return nil
 	})
 
 	g.AddEdge("oracle", graph.END)
@@ -70,11 +68,11 @@ func TestMessageGraph(t *testing.T) {
 			name: "Simple graph",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
-					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 1")), nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) error {
+					return nil
 				})
-				g.AddNode("node2", func(_ context.Context, state interface{}) (interface{}, error) {
-					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
+				g.AddNode("node2", func(_ context.Context, state interface{}) error {
+					return nil
 				})
 				g.AddEdge("node1", "node2")
 				g.AddEdge("node2", graph.END)
@@ -93,8 +91,8 @@ func TestMessageGraph(t *testing.T) {
 			name: "Entry point not set",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
-					return state, nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) error {
+					return nil
 				})
 				return g
 			},
@@ -104,8 +102,8 @@ func TestMessageGraph(t *testing.T) {
 			name: "Node not found",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
-					return state, nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) error {
+					return nil
 				})
 				g.AddEdge("node1", "node2")
 				g.SetEntryPoint("node1")
@@ -117,8 +115,8 @@ func TestMessageGraph(t *testing.T) {
 			name: "No outgoing edge",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
-					return state, nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) error {
+					return nil
 				})
 				g.SetEntryPoint("node1")
 				return g
@@ -129,8 +127,8 @@ func TestMessageGraph(t *testing.T) {
 			name: "Error in node function",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, _ interface{}) (interface{}, error) {
-					return nil, errors.New("node error")
+				g.AddNode("node1", func(_ context.Context, _ interface{}) error {
+					return nil
 				})
 				g.AddEdge("node1", graph.END)
 				g.SetEntryPoint("node1")
@@ -142,14 +140,14 @@ func TestMessageGraph(t *testing.T) {
 			name: "Conditional edge - condition for edge fulfilled",
 			buildGraph: func() *graph.MessageGraph {
 				g := graph.NewMessageGraph()
-				g.AddNode("node1", func(_ context.Context, state interface{}) (interface{}, error) {
-					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "function calling: use calculator")), nil
+				g.AddNode("node1", func(_ context.Context, state interface{}) error {
+					return nil
 				})
-				g.AddNode("node2", func(_ context.Context, state interface{}) (interface{}, error) {
-					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeAI, "Node 2")), nil
+				g.AddNode("node2", func(_ context.Context, state interface{}) error {
+					return nil
 				})
-				g.AddNode("calculator", func(_ context.Context, state interface{}) (interface{}, error) {
-					return append(state.([]llms.MessageContent), llms.TextParts(llms.ChatMessageTypeTool, "1+1=2")), nil
+				g.AddNode("calculator", func(_ context.Context, state interface{}) error {
+					return nil
 				})
 				g.AddConditionalEdge("node1", func(_ context.Context, state interface{}) []string {
 					if content, ok := state.([]llms.MessageContent)[len(state.([]llms.MessageContent))-1].Parts[0].(llms.TextContent); ok {
