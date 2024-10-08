@@ -52,6 +52,8 @@ type MessageGraph struct {
 
 	// entryPoint is the name of the entry point node in the graph.
 	entryPoint string
+
+	PostExecFunc func(ctx context.Context, state interface{})
 }
 
 // NewMessageGraph creates a new instance of MessageGraph.
@@ -94,13 +96,23 @@ type Runnable struct {
 	graph *MessageGraph
 }
 
+type option func(g *MessageGraph)
+
+func WithPostExecFunc(f func(ctx context.Context, state interface{})) option {
+	return func(g *MessageGraph) {
+		g.PostExecFunc = f
+	}
+}
+
 // Compile compiles the message graph and returns a Runnable instance.
 // It returns an error if the entry point is not set.
-func (g *MessageGraph) Compile() (*Runnable, error) {
+func (g *MessageGraph) Compile(opts ...option) (*Runnable, error) {
 	if g.entryPoint == "" {
 		return nil, ErrEntryPointNotSet
 	}
-
+	for _, opt := range opts {
+		opt(g)
+	}
 	return &Runnable{
 		graph: g,
 	}, nil
@@ -111,6 +123,7 @@ func (g *MessageGraph) Compile() (*Runnable, error) {
 // Invoke executes the compiled message graph with the given input messages.
 // It returns the resulting messages and an error if any occurs during the execution.
 func (r *Runnable) Invoke(ctx context.Context, messages interface{}) (interface{}, error) {
+	defer r.graph.PostExecFunc(ctx, messages)
 	state := messages
 	currentNode := r.graph.entryPoint
 
